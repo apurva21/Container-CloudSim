@@ -21,6 +21,8 @@ import org.cloudbus.cloudsim.lists.CloudletList;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +33,7 @@ import java.util.HashMap;
  * Created by sareh on 15/07/15.
  */
 
-public class ContainerDatacenterBrokerGA extends SimEntity {
+public class ContainerDatacenterBrokerGWO extends SimEntity {
 
 
     /**
@@ -140,7 +142,7 @@ public class ContainerDatacenterBrokerGA extends SimEntity {
      * @pre name != null
      * @post $none
      */
-    public ContainerDatacenterBrokerGA(String name, double overBookingfactor) throws Exception {
+    public ContainerDatacenterBrokerGWO(String name, double overBookingfactor) throws Exception {
         super(name);
 
         setVmList(new ArrayList<ContainerVm>());
@@ -166,6 +168,7 @@ public class ContainerDatacenterBrokerGA extends SimEntity {
         setNumberOfCreatedVMs(0);
     }
 
+    
 
     
 
@@ -244,7 +247,7 @@ public class ContainerDatacenterBrokerGA extends SimEntity {
             // VM Creation answer
             case CloudSimTags.VM_CREATE_ACK:
                 processVmCreate(ev);
-                //GAImplement(containerList, vmsCreatedList);
+
                 break;
             // New VM Creation answer
             case containerCloudSimTags.VM_NEW_CREATE:
@@ -382,7 +385,7 @@ public class ContainerDatacenterBrokerGA extends SimEntity {
         if(getVmList().size() == vmsAcks){
 
             submitContainers();
-            GAImplement(containerList, vmsCreatedList);
+            GWOImplement(containerList, vmsCreatedList);
             
             
         }
@@ -412,8 +415,222 @@ public class ContainerDatacenterBrokerGA extends SimEntity {
 //        }
         finishExecution();
     }
+    
+    
+    
+    private static final int MAX_ITERATIONS = 1500;
+    private static final int PACK_SIZE = 100;
 
-    /**
+    private static final double ALPHA = 2; // Alpha parameter
+    private static final double BETA = 3; // Beta parameter
+    private static final double DELTA = 4; // Delta parameter
+    double[] bestFitnessForIterations=  new double[MAX_ITERATIONS];
+
+    private void GWOImplement(List<? extends Container> containerList2, List<? extends ContainerVm> vmsCreatedList2) {
+        List<Wolf> pack = new ArrayList<>();
+        int numVms = vmsCreatedList2.size();
+        int numContainers = containerList2.size();
+
+        // Initialize the wolf pack
+        for (int i = 0; i < PACK_SIZE; i++) {
+            Wolf wolf = new Wolf(numVms, numContainers);
+            boolean valid = valid(wolf.getPosition(), containerList2, vmsCreatedList2);
+            if (valid) {
+                pack.add(wolf);
+                double fitness = evaluateFitness(wolf.getPosition(),containerList2,vmsCreatedList2, hostList);
+                wolf.setFitness(fitness); 
+            } else {
+                i--;
+            }
+        }
+
+        
+
+        for (int iteration = 0; iteration < MAX_ITERATIONS-1; iteration++) {
+        	int retry=0;
+        	// Update alpha, beta, and delta wolves
+            updateAlphaBetaDeltaWolves(pack, iteration);
+            // GWO loop
+            for (int i=0; i<pack.size();i++) {
+            	Wolf wolf= pack.get(i);
+            	// a decreases linearly from 2 to 0
+                double a = 2 - iteration * (2.0 / MAX_ITERATIONS); // a decreases linearly from 2 to 0
+                int[] originalPosition = wolf.getPosition().clone(); // Clone the original position
+
+                boolean valid = false;
+                
+                while (!valid && retry < 1000) {
+                    int[] newPosition = wolf.getPosition().clone();
+                    wolf.updatePosition(a, numVms); // Update the wolf's position
+
+                    if (valid(wolf.getPosition(), containerList, vmList)) {
+                        // Calculate the fitness for the updated position of the current wolf
+                        double fitness = evaluateFitness(wolf.getPosition(),containerList2,vmsCreatedList2, hostList);
+                        wolf.setFitness(fitness); // Assign the calculated fitness value to the wolf
+                        valid = true;
+                    } else {
+                        wolf.setPosition(newPosition);
+                        retry++;
+                    }
+                }
+                
+                if (!valid) {
+                    wolf.setPosition(originalPosition.clone()); // Restore the original position if no valid position is found
+                    double fitness = evaluateFitness(wolf.getPosition(),containerList2,vmsCreatedList2, hostList);
+                    wolf.setFitness(fitness);	
+                }
+				/*
+				 * // Update the position of the current wolf based on alpha, beta, and delta
+				 * influences wolf.updatePosition(a, numVms); boolean valid=
+				 * valid(wolf.getPosition(),containerList2,vmsCreatedList2); if(valid) {
+				 * 
+				 * } else { if(retry<=2000) { retry +=1; i--; } wolf.setPosition(clone); }
+				 */
+             // Calculate the fitness for the updated position of the current wolf
+               // double fitness = evaluateFitness(wolf.getPosition(),containerList2,vmsCreatedList2, hostList);
+                //wolf.setFitness(fitness);
+            }
+         
+
+        }
+        updateAlphaBetaDeltaWolves(pack, MAX_ITERATIONS-1);
+        String stringArr = Arrays.toString(bestFitnessForIterations);
+        Log.printConcatLine("Best fitness values over Iterations (Power consumptions):  " + stringArr );
+
+    }
+
+        
+	
+             
+        private void updateAlphaBetaDeltaWolves(List<Wolf> pack, int iteration) {
+        	pack.sort(Comparator.comparingDouble(Wolf::getFitness)); // Sort wolves by fitness
+
+            // Update alpha, beta, and delta wolves
+            // Note: In this example, we're selecting the first three wolves as alpha, beta, and delta
+            // You can adjust this selection based on your fitness evaluation
+            Wolf alphaWolf = pack.get(0);
+            Wolf betaWolf = pack.get(1);
+            Wolf deltaWolf = pack.get(2);
+
+            // Update alpha, beta, and delta wolves in the Wolf instances
+            for (Wolf wolf : pack) {
+                wolf.setAlphaWolf(alphaWolf.getPosition());
+                wolf.setBetaWolf(betaWolf.getPosition());
+                wolf.setDeltaWolf(deltaWolf.getPosition());
+            }
+            
+            
+            Log.printConcatLine("Iteration: " + iteration + ": Best Wolf Fitness in Pack = " + alphaWolf.getFitness() + "W");
+            bestFitnessForIterations[iteration]= alphaWolf.getFitness();
+
+        }
+
+
+
+
+
+			private double evaluateFitness(int[] solution, List<? extends Container> containerList2,
+        			List<? extends ContainerVm> vmList2, List<ContainerHost> hostList2) {
+        		// TODO Auto-generated method stub
+            	double fitness = 0.0;
+
+                // Consolidate container MIPS allocation on VMs
+                Map<Integer, Double> vmMipsUsage = new HashMap<>();
+                Map<Integer, Double> HostMipsUsage = new HashMap<>();
+
+                for (int i = 0; i < containerList2.size(); i++) {
+                    Container container = containerList2.get(i);
+                    int vmId = solution[i];
+                    ContainerVm vm = vmList2.get(vmId-1);
+
+                    // Add container's MIPS usage to the corresponding VM's MIPS usage
+                    double containerMips = container.getWorkloadMips();
+                    double vmMipsUsed = vmMipsUsage.getOrDefault(vmId, 0.0);
+                    vmMipsUsed += containerMips;
+                    vmMipsUsage.put(vmId, vmMipsUsed);
+                }
+
+                // Check VM capacity constraints and calculate fitness
+                
+                for (int i = 0; i < vmList2.size(); i++) {
+                    ContainerVm vm = vmList2.get(i);
+                    if (!(vmMipsUsage.containsKey(vm.getId()))) {
+                		//hostUnused +=1 ;
+                		continue;
+                	}
+                    ContainerHost host= vm.getHost();
+                    int hostid= host.getId();
+
+                    double vmMipsUsed = vmMipsUsage.getOrDefault(i+1, 0.0);
+                    double HostMipsUsed = HostMipsUsage.getOrDefault(hostid, 0.0);
+                    HostMipsUsed += vmMipsUsed;
+                    HostMipsUsage.put(hostid, HostMipsUsed);
+                    
+                }
+                for (int i = 0; i < hostList2.size(); i++) {
+                	ContainerHost host= hostList2.get(i);
+                	if (!(HostMipsUsage.containsKey(host.getId()))) {
+                		//hostUnused +=1 ;
+                		continue;
+                	}
+                	PowerContainerHost powerHost = (PowerContainerHostUtilizationHistory) host;
+                	double hostcapacity= host.getTotalMips();
+                	double totalVmMipsUsed= HostMipsUsage.getOrDefault(i+1, 0.0);
+                	double utilization= totalVmMipsUsed/hostcapacity;
+                
+                	double power =powerHost.getPower(utilization);
+
+                fitness += power;
+                }
+                String stringArr = Arrays.toString(solution);
+                Log.printConcatLine("Fitness of Wolf : ", stringArr, "= ", fitness );
+
+                return fitness;
+            	
+        		
+        	}
+            private boolean valid(int[] solution, List<? extends Container> containerList2,
+        			List<? extends ContainerVm> vmList2) {
+            	Map<Integer, Double> vmMipsUsage = new HashMap<>();
+
+                for (int i = 0; i < containerList2.size(); i++) {
+                    Container container = containerList2.get(i);
+                    int vmId = solution[i];
+                    ContainerVm vm = vmList2.get(vmId-1);
+
+                    // Add container's MIPS usage to the corresponding VM's MIPS usage
+                    double containerMips = container.getWorkloadMips();
+                    double vmMipsUsed = vmMipsUsage.getOrDefault(vmId, 0.0);
+                    vmMipsUsed += containerMips;
+                    vmMipsUsage.put(vmId, vmMipsUsed);
+                }
+
+                // Check VM capacity constraints and calculate fitness
+                for (int i = 0; i < vmList2.size(); i++) {
+                    ContainerVm vm = vmList2.get(i);
+                    double vmMipsCapacity = vm.getMips() * vm.getNumberOfPes();
+                    double ConToVmMips = vmMipsUsage.getOrDefault(i+1, 0.0);
+
+                    // Check if VM's MIPS usage exceeds its capacity
+                    if (ConToVmMips > vmMipsCapacity) {
+                    	return false;
+                    	}
+                    }
+        		return true;
+        	}
+
+
+
+            // Run simulation
+            // (Your code to run CloudSim simulation here)
+        
+
+
+    	
+		
+
+
+	/**
      * Process a cloudlet return event.
      *
      * @param ev a SimEvent object
@@ -650,265 +867,179 @@ public class ContainerDatacenterBrokerGA extends SimEntity {
 
         // remove submitted cloudlets from waiting list
     }
-    private static final int POPULATION_SIZE = 100;
-    private static final int MAX_GENERATIONS = 1500;
-    private static final double MUTATION_RATE = 0.01;
-    
 
 
-    private void GAImplement(List<? extends Container> containerList2, List<? extends ContainerVm> vmList2) {
-		// TODO Auto-generated method stub
-    	int nc=containerList2.size();
-    	int nv=vmList2.size();
-    	List<int[]> population = new ArrayList<>();
-        for (int i = 0; i < POPULATION_SIZE; i++) {
-        	
-            int[] solution = new int[nc];
-            Random random = new Random();
-            for (int j = 0; j < nc; j++) {
-            	//Container c=containerList2.get(j);
-            	//double  contmips=c.getWorkloadMips();
-               //ContainerVm v=vmList2.get(random.nextInt(nv+1));
-               //if()v.containerCreate(c);
-              //double  vtotalmips= v.getMips() * v.getNumberOfPes();
-            	
-            	solution[j] = random.nextInt(nv)+1;	
-            }
-            boolean valid= valid(solution,containerList2,vmList2);
-            if(valid) {
-            	population.add(solution);
-            }
-            else {
-            	i--;
-            }
-               
-        }
-        
-        int[] bestSolution = null;
-        double  bestFitness = Double.POSITIVE_INFINITY;
-        double[] bestFitnessForGenerations=  new double[MAX_GENERATIONS];
-        
-        for (int generation = 1; generation <= MAX_GENERATIONS; generation++) {
-            // Evaluate the fitness of each solution in the population
-            double[] fitnessValues = new double[POPULATION_SIZE];
-            for (int i = 0; i < POPULATION_SIZE; i++) {
-                int[] solution = population.get(i);
-                double fitness = evaluateFitness(solution,containerList2,vmList2, hostList);
-                fitnessValues[i] = fitness;
-                if (fitness < bestFitness) {
-                    bestFitness = fitness;
-                    bestSolution = solution;
-                }
-            }
-            
-            bestFitnessForGenerations[generation-1]=bestFitness;
-
-            
-            //Log.printConcatLine("Best Allocation Solution:  " + bestSolution );
-            Log.printConcatLine("Generation " + generation + ": Best Fitness = " + bestFitness + "W");
-
-            // Select parents for crossover
-            List<int[]> parents = selectParents(population, fitnessValues);
-
-            // Perform crossover and mutation to create new offspring wrt to parents
-            List<int[]> offspring = new ArrayList<>();
-            for (int i = 0; i < parents.size() - 1; i += 2) {
-                int[] parent1 = parents.get(i);
-                int[] parent2 = parents.get(i + 1);
-                int[] child = crossover(parent1, parent2);
-                mutate(child, nv);
-                
-                boolean valid= valid(child,containerList2,vmList2);
-                if(valid) {
-                	offspring.add(child);
-                }
-                else {
-                	i=i-2;
-                }
-            }
-
-            // Replace the least fit solutions in the population with the new offspring
-            for (int i = 0; i < offspring.size(); i++) {
-                int index = findLeastFitIndex(population, fitnessValues);
-                population.set(index, offspring.get(i));
-            }
-        }
-     
-        // Print the best solution and fitness  
-        String stringArr = Arrays.toString(bestSolution);
-        // Print the best fitness over generations
-        String stringArr2 = Arrays.toString(bestFitnessForGenerations);
-     
-        Log.printConcatLine("Best Solution:  " + stringArr );
-        Log.printConcatLine("Best fitness values over generations (Power consumptions):  " + stringArr2 );
-        
-	}
-
-    private boolean valid(int[] solution, List<? extends Container> containerList2,
-			List<? extends ContainerVm> vmList2) {
-    	Map<Integer, Double> vmMipsUsage = new HashMap<>();
-
-        for (int i = 0; i < containerList2.size(); i++) {
-            Container container = containerList2.get(i);
-            int vmId = solution[i];
-            ContainerVm vm = vmList2.get(vmId-1);
-
-            // Add container's MIPS usage to the corresponding VM's MIPS usage
-            double containerMips = container.getWorkloadMips();
-            double vmMipsUsed = vmMipsUsage.getOrDefault(vmId, 0.0);
-            vmMipsUsed += containerMips;
-            vmMipsUsage.put(vmId, vmMipsUsed);
-        }
-
-        // Check VM capacity constraints and calculate fitness
-        for (int i = 0; i < vmList2.size(); i++) {
-            ContainerVm vm = vmList2.get(i);
-            double vmMipsCapacity = vm.getMips() * vm.getNumberOfPes();
-            double ConToVmMips = vmMipsUsage.getOrDefault(i+1, 0.0);
-
-            // Check if VM's MIPS usage exceeds its capacity
-            if (ConToVmMips > vmMipsCapacity) {
-            	return false;
-            	}
-            }
-		return true;
-	}
-
-	private double evaluateFitness(int[] solution, List<? extends Container> containerList2,
-			List<? extends ContainerVm> vmList2, List<ContainerHost> hostList2) {
-		// TODO Auto-generated method stub
-		double fitness = 0.0;
-
-        // Consolidate container MIPS allocation on VMs
-        Map<Integer, Double> vmMipsUsage = new HashMap<>();
-        Map<Integer, Double> HostMipsUsage = new HashMap<>();
-
-        for (int i = 0; i < containerList2.size(); i++) {
-            Container container = containerList2.get(i);
-            int vmId = solution[i];
-            ContainerVm vm = vmList2.get(vmId-1);
-
-            // Add container's MIPS usage to the corresponding VM's MIPS usage
-            double containerMips = container.getWorkloadMips();
-            double vmMipsUsed = vmMipsUsage.getOrDefault(vmId, 0.0);
-            vmMipsUsed += containerMips;
-            vmMipsUsage.put(vmId, vmMipsUsed);
-        }
-
-        // Check VM capacity constraints and calculate fitness
-        
-        for (int i = 0; i < vmList2.size(); i++) {
-            ContainerVm vm = vmList2.get(i);
-            //skipping vms that are not in the solution array
-            if (!(vmMipsUsage.containsKey(vm.getId()))) {
-        		
-        		continue;
-        	}
-            ContainerHost host= vm.getHost();
-            int hostid= host.getId();
-
-            double vmMipsUsed = vmMipsUsage.getOrDefault(i+1, 0.0);
-            double HostMipsUsed = HostMipsUsage.getOrDefault(hostid, 0.0);
-            HostMipsUsed += vmMipsUsed;
-            HostMipsUsage.put(hostid, HostMipsUsed);
-            
-        }
-        for (int i = 0; i < hostList2.size(); i++) {
-        	ContainerHost host= hostList2.get(i);
-        	// skipping hosts not in host usage hashmap list
-        	if (!(HostMipsUsage.containsKey(host.getId()))) { 
-        		continue;
-        	}
-        	PowerContainerHost powerHost = (PowerContainerHostUtilizationHistory) host;
-        	double hostcapacity= host.getTotalMips();
-        	double totalVmMipsUsed= HostMipsUsage.getOrDefault(i+1, 0.0);
-        	double utilization= totalVmMipsUsed/hostcapacity;
-        
-        	double power =powerHost.getPower(utilization);
-
-        fitness += power;
-        }
-        String stringArr = Arrays.toString(solution);
-        Log.printConcatLine("Fitness of solution  : ", stringArr, "= ", fitness );
-
-        return fitness;
-		
-	}
-
-	private static List<int[]> selectParents(List<int[]> population, double[] fitnessValues) {
-        List<int[]> parents = new ArrayList<>();
-        for (int i = 0; i < population.size() / 2; i++) {
-            // Select two parents based on tournament selection
-            int[] parent1 = tournamentSelection(population, fitnessValues);
-            int[] parent2 = tournamentSelection(population, fitnessValues);
-            parents.add(parent1);
-            parents.add(parent2);
-        }
-        return parents;
-    }
-
-    private static int[] tournamentSelection(List<int[]> population, double[] fitnessValues) {
-        // Select two individuals at random and return the fittest one
-    	Random random = new Random();
-
-        int index1 = random.nextInt(population.size());
-        int index2 = random.nextInt(population.size());
-        double fitness1 = fitnessValues[index1];
-        double fitness2 = fitnessValues[index2];
-        if (fitness1 < fitness2) {
-            return population.get(index1);
-        } else {
-            return population.get(index2);
-        }
-    }
-    private static int[] crossover(int[] parent1, int[] parent2) {
-    	int[] offspring = new int[parent1.length];
-        Random random = new Random();
-
-        // Select a random crossover point
-        int crossoverPoint = random.nextInt(parent1.length);
-
-        // Copy genetic material from parent1 up to the crossover point
-        for (int i = 0; i < crossoverPoint; i++) {
-            offspring[i] = parent1[i];
-        }
-
-        // Copy remaining genetic material from parent2
-        for (int i = crossoverPoint; i < parent2.length; i++) {
-            offspring[i] = parent2[i];
-        }
-
-        return offspring;
-
-    }
-
-    private static void mutate(int[] solution, int vmsize) {
-    	Random random = new Random();
-        
-        for (int i = 0; i < solution.length; i++) {
-            if (random.nextDouble() < MUTATION_RATE) {
-                // Perform mutation by randomly selecting a new value for the gene
-                int geneValue = random.nextInt(vmsize)+1; // Adjust the range of possible gene values as needed
-                solution[i] = geneValue;
-            }
-        }
-    
-    }
-    private static int findLeastFitIndex(List<int[]> population, double[] fitnessValues) {
-        int index = 0;
-        double minFitness = Double.MIN_VALUE;
-        for (int i = 0; i < population.size(); i++) {
-            double fitness = fitnessValues[i];
-            if (fitness > minFitness) {
-                index = i;
-                minFitness = fitness;
-                
-            }
-        }
-        fitnessValues[index]=Double.MIN_VALUE;
-        return index;
-    }
-
+	/*
+	 * private void GAImplement(List<? extends Container> containerList2, List<?
+	 * extends ContainerVm> vmList2) { // TODO Auto-generated method stub int
+	 * nc=containerList2.size(); int nv=vmList2.size(); List<int[]> population = new
+	 * ArrayList<>(); for (int i = 0; i < POPULATION_SIZE; i++) {
+	 * 
+	 * int[] solution = new int[nc]; Random random = new Random(); for (int j = 0; j
+	 * < nc; j++) { //Container c=containerList2.get(j); //double
+	 * contmips=c.getWorkloadMips(); //ContainerVm
+	 * v=vmList2.get(random.nextInt(nv+1)); //if()v.containerCreate(c); //double
+	 * vtotalmips= v.getMips() * v.getNumberOfPes();
+	 * 
+	 * solution[j] = random.nextInt(nv)+1; } boolean valid=
+	 * valid(solution,containerList2,vmList2); if(valid) { population.add(solution);
+	 * } else { i--; }
+	 * 
+	 * }
+	 * 
+	 * int[] bestSolution = null; double bestFitness = 1000000000; double[]
+	 * bestFitnessForGenerations= new double[MAX_GENERATIONS];;
+	 * 
+	 * for (int generation = 1; generation <= MAX_GENERATIONS; generation++) { //
+	 * Evaluate the fitness of each solution in the population double[]
+	 * fitnessValues = new double[POPULATION_SIZE]; for (int i = 0; i <
+	 * POPULATION_SIZE; i++) { int[] solution = population.get(i); double fitness =
+	 * evaluateFitness(solution,containerList2,vmList2, hostList); fitnessValues[i]
+	 * = fitness; if (fitness < bestFitness) { bestFitness = fitness; bestSolution =
+	 * solution; } }
+	 * 
+	 * bestFitnessForGenerations[generation-1]=bestFitness;
+	 * 
+	 * // Print the best solution and fitness String stringArr =
+	 * Arrays.toString(bestSolution);
+	 * //Log.printConcatLine("Best Allocation Solution:  " + bestSolution );
+	 * Log.printConcatLine("Generation " + generation + ": Best Fitness = " +
+	 * bestFitness + "kW");
+	 * 
+	 * // Select parents for crossover List<int[]> parents =
+	 * selectParents(population, fitnessValues);
+	 * 
+	 * // Perform crossover and mutation to create new offspring wrt to parents
+	 * List<int[]> offspring = new ArrayList<>(); for (int i = 0; i < parents.size()
+	 * - 1; i += 2) { int[] parent1 = parents.get(i); int[] parent2 = parents.get(i
+	 * + 1); int[] child = crossover(parent1, parent2); mutate(child, nv);
+	 * 
+	 * boolean valid= valid(child,containerList2,vmList2); if(valid) {
+	 * offspring.add(child); } else { i=i-2; } }
+	 * 
+	 * // Replace the least fit solutions in the population with the new offspring
+	 * for (int i = 0; i < offspring.size(); i++) { int index =
+	 * findLeastFitIndex(population, fitnessValues); population.set(index,
+	 * offspring.get(i)); } }
+	 * 
+	 * 
+	 * // Print the best fitness over generations String stringArr =
+	 * Arrays.toString(bestFitnessForGenerations); Log.
+	 * printConcatLine("Best fitness values over generations (Power consumptions):  "
+	 * + stringArr );
+	 * 
+	 * }
+	 * 
+	 * private boolean valid(int[] solution, List<? extends Container>
+	 * containerList2, List<? extends ContainerVm> vmList2) { Map<Integer, Double>
+	 * vmMipsUsage = new HashMap<>();
+	 * 
+	 * for (int i = 0; i < containerList2.size(); i++) { Container container =
+	 * containerList2.get(i); int vmId = solution[i]; ContainerVm vm =
+	 * vmList2.get(vmId-1);
+	 * 
+	 * // Add container's MIPS usage to the corresponding VM's MIPS usage double
+	 * containerMips = container.getWorkloadMips(); double vmMipsUsed =
+	 * vmMipsUsage.getOrDefault(vmId, 0.0); vmMipsUsed += containerMips;
+	 * vmMipsUsage.put(vmId, vmMipsUsed); }
+	 * 
+	 * // Check VM capacity constraints and calculate fitness for (int i = 0; i <
+	 * vmList2.size(); i++) { ContainerVm vm = vmList2.get(i); double vmMipsCapacity
+	 * = vm.getMips() * vm.getNumberOfPes(); double ConToVmMips =
+	 * vmMipsUsage.getOrDefault(i+1, 0.0);
+	 * 
+	 * // Check if VM's MIPS usage exceeds its capacity if (ConToVmMips >
+	 * vmMipsCapacity) { return false; } } return true; }
+	 * 
+	 * private double evaluateFitness(int[] solution, List<? extends Container>
+	 * containerList2, List<? extends ContainerVm> vmList2, List<ContainerHost>
+	 * hostList2) { // TODO Auto-generated method stub double fitness = 0.0;
+	 * 
+	 * // Consolidate container MIPS allocation on VMs Map<Integer, Double>
+	 * vmMipsUsage = new HashMap<>(); Map<Integer, Double> HostMipsUsage = new
+	 * HashMap<>();
+	 * 
+	 * for (int i = 0; i < containerList2.size(); i++) { Container container =
+	 * containerList2.get(i); int vmId = solution[i]; ContainerVm vm =
+	 * vmList2.get(vmId-1);
+	 * 
+	 * // Add container's MIPS usage to the corresponding VM's MIPS usage double
+	 * containerMips = container.getWorkloadMips(); double vmMipsUsed =
+	 * vmMipsUsage.getOrDefault(vmId, 0.0); vmMipsUsed += containerMips;
+	 * vmMipsUsage.put(vmId, vmMipsUsed); }
+	 * 
+	 * // Check VM capacity constraints and calculate fitness
+	 * 
+	 * for (int i = 0; i < vmList2.size(); i++) { ContainerVm vm = vmList2.get(i);
+	 * ContainerHost host= vm.getHost(); int hostid= host.getId();
+	 * 
+	 * double vmMipsUsed = vmMipsUsage.getOrDefault(i+1, 0.0); double HostMipsUsed =
+	 * HostMipsUsage.getOrDefault(hostid, 0.0); HostMipsUsed += vmMipsUsed;
+	 * HostMipsUsage.put(hostid, HostMipsUsed);
+	 * 
+	 * } for (int i = 0; i < hostList2.size(); i++) { ContainerHost host=
+	 * hostList2.get(i); PowerContainerHost powerHost =
+	 * (PowerContainerHostUtilizationHistory) host; double hostcapacity=
+	 * host.getTotalMips(); double totalVmMipsUsed= HostMipsUsage.getOrDefault(i+1,
+	 * 0.0); double utilization= totalVmMipsUsed/hostcapacity;
+	 * 
+	 * double power =powerHost.getPower(utilization);
+	 * 
+	 * fitness += power; } String stringArr = Arrays.toString(solution);
+	 * Log.printConcatLine("Fitness of solution (Datacenter Power Consumption): ",
+	 * stringArr, "= ", fitness );
+	 * 
+	 * return fitness;
+	 * 
+	 * 
+	 * }
+	 * 
+	 * private static List<int[]> selectParents(List<int[]> population, double[]
+	 * fitnessValues) { List<int[]> parents = new ArrayList<>(); for (int i = 0; i <
+	 * population.size() / 2; i++) { // Select two parents based on tournament
+	 * selection int[] parent1 = tournamentSelection(population, fitnessValues);
+	 * int[] parent2 = tournamentSelection(population, fitnessValues);
+	 * parents.add(parent1); parents.add(parent2); } return parents; }
+	 * 
+	 * private static int[] tournamentSelection(List<int[]> population, double[]
+	 * fitnessValues) { // Select two individuals at random and return the fittest
+	 * one Random random = new Random();
+	 * 
+	 * int index1 = random.nextInt(population.size()); int index2 =
+	 * random.nextInt(population.size()); double fitness1 = fitnessValues[index1];
+	 * double fitness2 = fitnessValues[index2]; if (fitness1 < fitness2) { return
+	 * population.get(index1); } else { return population.get(index2); } } private
+	 * static int[] crossover(int[] parent1, int[] par ent2) { int[] offspring = new
+	 * int[parent1.length]; Random random = new Random();
+	 * 
+	 * // Select a random crossover point int crossoverPoint =
+	 * random.nextInt(parent1.length);
+	 * 
+	 * // Copy genetic material from parent1 up to the crossover point for (int i =
+	 * 0; i < crossoverPoint; i++) { offspring[i] = parent1[i]; }
+	 * 
+	 * // Copy remaining genetic material from parent2 for (int i = crossoverPoint;
+	 * i < parent2.length; i++) { offspring[i] = parent2[i]; }
+	 * 
+	 * return offspring;
+	 * 
+	 * }
+	 * 
+	 * private static void mutate(int[] solution, int vmsize) { Random random = new
+	 * Random();
+	 * 
+	 * for (int i = 0; i < solution.length; i++) { if (random.nextDouble() <
+	 * MUTATION_RATE) { // Perform mutation by randomly selecting a new value for
+	 * the gene int geneValue = random.nextInt(vmsize)+1; // Adjust the range of
+	 * possible gene values as needed solution[i] = geneValue; } }
+	 * 
+	 * } private static int findLeastFitIndex(List<int[]> population, double[]
+	 * fitnessValues) { int index = 0; double minFitness = Double.MIN_VALUE; for
+	 * (int i = 0; i < population.size(); i++) { double fitness = fitnessValues[i];
+	 * if (fitness > minFitness) { index = i; minFitness = fitness;
+	 * 
+	 * } } fitnessValues[index]=Double.MIN_VALUE; return index; }
+	 */
 	/**
      * Send an internal event communicating the end of the simulation.
      *

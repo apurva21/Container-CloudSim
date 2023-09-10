@@ -165,9 +165,7 @@ public class ContainerDatacenterBrokerPSO extends SimEntity {
         setDatacenterCharacteristicsList(new HashMap<Integer, ContainerDatacenterCharacteristics>());
         setNumberOfCreatedVMs(0);
     }
-    private static final int POPULATION_SIZE = 1000;
-    private static final int MAX_GENERATIONS = 500;
-    private static final double MUTATION_RATE = 0.1;
+
     
 
     
@@ -247,7 +245,7 @@ public class ContainerDatacenterBrokerPSO extends SimEntity {
             // VM Creation answer
             case CloudSimTags.VM_CREATE_ACK:
                 processVmCreate(ev);
-                //GAImplement(containerList, vmsCreatedList);
+
                 break;
             // New VM Creation answer
             case containerCloudSimTags.VM_NEW_CREATE:
@@ -416,14 +414,14 @@ public class ContainerDatacenterBrokerPSO extends SimEntity {
         finishExecution();
     }
     
-    //private static final double INERTIA_WEIGHT = 0.5;
-    private static final int MAX_ITERATIONS = 500;
+    private static final double INERTIA_WEIGHT = 0.5;
+    private static final int MAX_ITERATIONS = 1500;
     private static final int SWARM_SIZE = 100;
 
-	private static final double C1 = 2; //COGNITIVE_WEIGHT
-	private static final double C2 = 2;  //SOCIAL_WEIGHT
+	private static final double C1 = 1; //COGNITIVE_WEIGHT
+	private static final double C2 = 1;  //SOCIAL_WEIGHT
 
-    private void PSOImplement(List<? extends Container> containerList2, List<? extends ContainerVm> vmsCreatedList2) {
+	private void PSOImplement(List<? extends Container> containerList2, List<? extends ContainerVm> vmsCreatedList2) {
 		// TODO Auto-generated method stub
     	List<Particle> swarm = new ArrayList<>();
         int numVms= vmsCreatedList2.size();
@@ -459,7 +457,7 @@ public class ContainerDatacenterBrokerPSO extends SimEntity {
             for (int iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
             	double  start=0.9;
             	double  end=0.2;
-            	double INERTIA_WEIGHT=start - (start-end)*iteration/(MAX_ITERATIONS-1);
+            	//double INERTIA_WEIGHT=start - (start-end)*iteration/(MAX_ITERATIONS-1);
                 for (Particle particle : swarm) {
                 	//fitness of position
                      double fitness = evaluateFitness(particle.getPosition(),containerList2,vmsCreatedList2, hostList);;

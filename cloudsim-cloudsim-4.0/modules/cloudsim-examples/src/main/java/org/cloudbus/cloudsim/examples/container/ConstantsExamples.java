@@ -72,9 +72,9 @@ public class ConstantsExamples {
      */
 
 
-    public static final int NUMBER_HOSTS = 5 ;
-    public static final int NUMBER_VMS = 15;
-    public static final int NUMBER_CLOUDLETS =100;
+    public static final int NUMBER_HOSTS = 25 ;
+    public static final int NUMBER_VMS = 70;
+    public static final int NUMBER_CLOUDLETS =500;
 
 //-----------------------The Addresses
 

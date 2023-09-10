@@ -5,6 +5,7 @@ package org.cloudbus.cloudsim.examples.container;
  * Title:        ContainerCloudSimExample1 Toolkit
  * Description:  ContainerCloudSimExample1 (containerized cloud simulation) Toolkit for Modeling and Simulation
  *               of Containerized Clouds
+ *               
  * Licence:      GPL - http://www.gnu.org/copyleft/gpl.html
  *
  * Copyright (c) 2009, The University of Melbourne, Australia
@@ -48,7 +49,7 @@ import java.util.List;
 /**
  * A simple example showing how to create a data center with one host, one VM, one container and run one cloudlet on it.
  */
-public class ContainerAllocation {
+public class ContainerAllocationPSO {
 
     /**
      * The cloudlet list.
@@ -150,7 +151,7 @@ public class ContainerAllocation {
              * allocation process.
              */
             int overBookingFactor = 80;
-            ContainerDatacenterBrokerGA broker = createBroker(overBookingFactor);
+            ContainerDatacenterBrokerPSO broker = createBroker(overBookingFactor);
             int brokerId = broker.getId();
             /**
              * 9- Creating the cloudlet, container and VM lists for submitting to the broker.
@@ -231,12 +232,12 @@ public class ContainerAllocation {
      * @param overBookingFactor
      * @return the datacenter broker
      */
-    private static ContainerDatacenterBrokerGA createBroker(int overBookingFactor) {
+    private static ContainerDatacenterBrokerPSO createBroker(int overBookingFactor) {
 
-        ContainerDatacenterBrokerGA broker = null;
+    	ContainerDatacenterBrokerPSO broker = null;
 
         try {
-            broker = new ContainerDatacenterBrokerGA("Broker", overBookingFactor);
+            broker = new ContainerDatacenterBrokerPSO("Broker", overBookingFactor);
         } catch (Exception var2) {
             var2.printStackTrace();
             System.exit(0);
@@ -250,27 +251,35 @@ public class ContainerAllocation {
      *
      * @param list list of Cloudlets
      */
-	/*
-	 * private static void printCloudletList(List<ContainerCloudlet> list) { int
-	 * size = list.size(); Cloudlet cloudlet;
-	 * 
-	 * String indent = "    "; Log.printLine();
-	 * Log.printLine("========== OUTPUT =========="); Log.printLine("Cloudlet ID" +
-	 * indent + "STATUS" + indent + "Data center ID" + indent + "VM ID" + indent +
-	 * "Time" + indent + "Start Time" + indent + "Finish Time");
-	 * 
-	 * DecimalFormat dft = new DecimalFormat("###.##"); for (int i = 0; i < size;
-	 * i++) { cloudlet = list.get(i); Log.print(indent + cloudlet.getCloudletId() +
-	 * indent + indent);
-	 * 
-	 * if (cloudlet.getCloudletStatusString() == "Success") { Log.print("SUCCESS");
-	 * 
-	 * Log.printLine(indent + indent + cloudlet.getResourceId() + indent + indent +
-	 * indent + cloudlet.getVmId() + indent + indent +
-	 * dft.format(cloudlet.getActualCPUTime()) + indent + indent +
-	 * dft.format(cloudlet.getExecStartTime()) + indent + indent +
-	 * dft.format(cloudlet.getFinishTime())); } } }
-	 */
+    private static void printCloudletList(List<ContainerCloudlet> list) {
+        int size = list.size();
+        Cloudlet cloudlet;
+
+        String indent = "    ";
+        Log.printLine();
+        Log.printLine("========== OUTPUT ==========");
+        Log.printLine("Cloudlet ID" + indent + "STATUS" + indent
+                + "Data center ID" + indent + "VM ID" + indent + "Time" + indent
+                + "Start Time" + indent + "Finish Time");
+
+        DecimalFormat dft = new DecimalFormat("###.##");
+        for (int i = 0; i < size; i++) {
+            cloudlet = list.get(i);
+            Log.print(indent + cloudlet.getCloudletId() + indent + indent);
+
+            if (cloudlet.getCloudletStatusString() == "Success") {
+                Log.print("SUCCESS");
+
+                Log.printLine(indent + indent + cloudlet.getResourceId()
+                        + indent + indent + indent + cloudlet.getVmId()
+                        + indent + indent
+                        + dft.format(cloudlet.getActualCPUTime()) + indent
+                        + indent + dft.format(cloudlet.getExecStartTime())
+                        + indent + indent
+                        + dft.format(cloudlet.getFinishTime()));
+            }
+        }
+    }
 
     /**
      * Create the Virtual machines and add them to the list
